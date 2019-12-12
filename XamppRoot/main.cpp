@@ -173,8 +173,6 @@ int main(int argc, char* argv[])
 		}
 
 		cout << "Selected path: " << path << "\n\n";
-		return 0;
-
 
 		//Read of the whole content of httpd configuration file
 		ifstream httpd_in("C:\\xampp\\apache\\conf\\httpd.conf");
