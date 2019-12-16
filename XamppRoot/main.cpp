@@ -4,6 +4,8 @@
 #include <regex>
 #include <windows.h>
 #include "getopt.h"
+#include <filesystem>
+namespace fs = std::filesystem;
 
 #define MAX_PATH 250
 #define HELP_MSG "\
@@ -18,7 +20,18 @@ For more information visit https://github.com/alessandrocara2/XamppRoot \n\n\
   -r --relative\t\Realtive path to set as root directory\n\
 \n\
 >>RULES:\n\
+1 - Make sure Xampp Apache server is stopped\n\
+2 - Run xampproot from command line prompt\n\
+3 - Start Xampp Apache server\n\
+4 - Enjoy :-)\n\
 \n\
+>>EXAMPLES:\n\
+	xampproot -l\n\
+Result: Xampp localhost points to current directory\n\n\
+	xampproot -p C:\\Users\\localuser\\Desktop\n\
+Result: Xampp localhost points to localuser's Desktop folder\n\n\
+	xampproot -r ..\\rootdir\n\
+Result: Xampp localhost points to rootdir in father's directory\n\
 \n\
 "
 
@@ -29,12 +42,10 @@ int main(int argc, char* argv[])
 	if (argc > 1)
 	{
 		//Variable for storing xampp root path
-		string path;
+		fs::path selectedPath;
 
-		//curPath stores the current executing path 
-		char buf[256];
-		GetCurrentDirectoryA(256, buf);
-		string curPath = string(buf);
+		//curPath stores the current executing path
+		fs::path curPath = fs::current_path();
 
 		//Variable for the command line options management
 		char opt = 0;
@@ -69,76 +80,25 @@ int main(int argc, char* argv[])
 			}
 			case 'l':
 			{
-				path = curPath;
+				selectedPath = curPath;
 				break;
 			}
 			case 'p':
 			{
-				path = optarg;
+				//Removal of last "\"
+				string path = optarg;
+				if (path[path.length() - 1] == '\\' || path[path.length() - 1] == '\"')
+					path[path.length() - 1] = '\0';
+				selectedPath = path;
 				break;
 			}
 			case 'r':
 			{
-				string relpath = optarg;
-
-				//Removal of last "\"
-				if (relpath[relpath.length() - 1] == '\\' || relpath[relpath.length() - 1] == '\"')
-					relpath[relpath.length() - 1] = '\0';
-
-				int rel_len = relpath.length();
-				path = curPath;
-
-				int dotnum = 0;
-				for (int i = 0; i < rel_len; i++) {
-					if (relpath[i] == '.')
-						dotnum++;
-					else
-						dotnum = 0;
-
-					if (dotnum > 2) {
-						cout << "Invalid relative path";
-						return 0;
-					}
-				}
-
-				if (rel_len > 1) {
-					if (relpath[0] != '.') {
-						if (relpath[0] == '\\')
-							relpath = relpath.erase(0, 1);
-						path = path + '\\' + relpath;
-					}
-					else {
-						if (relpath[1] != '.') {
-							relpath = relpath.erase(0, 1);
-							path = path + relpath;
-						}
-						else {
-							dotnum = 0;
-							int i, lastdot;
-							for (i = 0; i < rel_len; i++) {
-								if (relpath[i] == '.') {
-									dotnum++;
-									lastdot = i;
-								}
-							}
-
-
-							int count = dotnum / 2;
-							for (i = path.length() - 1; i >= 0 && count > 0; i--) {
-								if (path[i] == '\\')
-									count--;
-							}
-
-							i++;
-
-							for (int j = lastdot + 1; j < rel_len; i++, j++) {
-								path[i] = relpath[j];
-							}
-							path = path.erase(i, path.length() - i);
-						}
-					}
-				}
-
+				string path = optarg;
+				if (path[path.length() - 1] == '\\' || path[path.length() - 1] == '\"')
+					path[path.length() - 1] = '\0';
+				fs::path relpath = path;
+				selectedPath = fs::absolute(relpath);
 				break;
 			}
 			case ':':
@@ -161,18 +121,13 @@ int main(int argc, char* argv[])
 			return 0;
 		}
 
-		//Removal of last "\"
-		if (path[path.length() - 1] == '\\' || path[path.length() - 1] == '\"')
-			path[path.length() - 1] = '\0';
-
 		//Check if path variable represents a valid path
-		DWORD ftyp = GetFileAttributesA(path.c_str());
-		if (ftyp == INVALID_FILE_ATTRIBUTES || !(ftyp & FILE_ATTRIBUTE_DIRECTORY)) {
-			cout << "\nError, \"" << path << "\" is not a valid path, exiting\n\n";
+		if (!fs::is_directory(selectedPath)) {
+			cout << "\nError, " << selectedPath << " is not a valid path, exiting\n\n";
 			return 0;
 		}
 
-		cout << "Selected path: " << path << "\n\n";
+		cout << "Selected path: " << selectedPath << "\n\n";
 
 		//Read of the whole content of httpd configuration file
 		ifstream httpd_in("C:\\xampp\\apache\\conf\\httpd.conf");
@@ -182,7 +137,7 @@ int main(int argc, char* argv[])
 
 		//Match of the path to be substituted and substitution
 		regex httpd_regex("(DocumentRoot \")(.*)(\"\n<Directory \")(.*)(\">)");
-		string httpd_replaced = regex_replace(httpd_content, httpd_regex, "$1" + string(path) + "$3" + string(path) + "$5");
+		string httpd_replaced = regex_replace(httpd_content, httpd_regex, "$1" + selectedPath.string() + "$3" + selectedPath.string() + "$5");
 
 		//Modification of httpd file
 		ofstream httpd_out("C:\\xampp\\apache\\conf\\httpd.conf");
@@ -198,7 +153,7 @@ int main(int argc, char* argv[])
 
 		//Match of the path to be substituted and substitution
 		regex httpdssl_regex("(DocumentRoot \")(.*)(\")");
-		string httpdssl_replaced = regex_replace(httpdssl_content, httpdssl_regex, "$1" + string(path) + "$3");
+		string httpdssl_replaced = regex_replace(httpdssl_content, httpdssl_regex, "$1" + selectedPath.string() + "$3");
 
 		//Modification of httpd-ssl file
 		ofstream httpdssl_out("C:\\xampp\\apache\\conf\\extra\\httpd-ssl.conf");
