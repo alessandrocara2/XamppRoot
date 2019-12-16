@@ -16,8 +16,8 @@ For more information visit https://github.com/alessandrocara2/XamppRoot \n\n\
 >>OPTIONS:\n\
   -h --help\t\tView this help page\n\
   -l --local\t\tSet current directory as root directory\n\
-  -p --path\t\tAbsolute path to set as root directory\n\
-  -r --relative\t\Realtive path to set as root directory\n\
+  -p --path\t\Path to set as root directory (either absolute or relative)\n\
+  -x --xamppfolder\t\tPath to Xampp main directory (if different from C:\\xampp)\
 \n\
 >>RULES:\n\
 1 - Make sure Xampp Apache server is stopped\n\
@@ -44,6 +44,9 @@ int main(int argc, char* argv[])
 		//Variable for storing xampp root path
 		fs::path selectedPath;
 
+		//Variable for xampp root folder
+		fs::path xamppFolder = "C:\\xampp";
+
 		//curPath stores the current executing path
 		fs::path curPath = fs::current_path();
 
@@ -56,7 +59,7 @@ int main(int argc, char* argv[])
 			{ "help",			no_argument,		0,	'h' },
 			{ "path",			required_argument,	0,	'p' },
 			{ "local",			no_argument,		0,	'l' },
-			{ "relative",		required_argument,	0,	'r' },
+			{ "xamppfolder",	required_argument,	0,	'x' },
 			{ 0, 0, 0, 0 }
 		};
 
@@ -64,7 +67,7 @@ int main(int argc, char* argv[])
 		{
 			int option_index = 0;
 
-			opt = getopt_long(argc, argv, "hlp:r:", long_options, &option_index);
+			opt = getopt_long(argc, argv, "hlp:x:", long_options, &option_index);
 
 			/* Detect the end of the options. */
 			if (opt == -1)
@@ -89,16 +92,17 @@ int main(int argc, char* argv[])
 				string path = optarg;
 				if (path[path.length() - 1] == '\\' || path[path.length() - 1] == '\"')
 					path[path.length() - 1] = '\0';
-				selectedPath = path;
+				fs::path relpath = path;
+				selectedPath = fs::absolute(relpath);
 				break;
 			}
-			case 'r':
+			case 'x':
 			{
 				string path = optarg;
 				if (path[path.length() - 1] == '\\' || path[path.length() - 1] == '\"')
 					path[path.length() - 1] = '\0';
-				fs::path relpath = path;
-				selectedPath = fs::absolute(relpath);
+				fs::path folderpath = path;
+				xamppFolder = fs::absolute(folderpath);
 				break;
 			}
 			case ':':
@@ -130,7 +134,7 @@ int main(int argc, char* argv[])
 		cout << "Selected path: " << selectedPath << "\n\n";
 
 		//Read of the whole content of httpd configuration file
-		ifstream httpd_in("C:\\xampp\\apache\\conf\\httpd.conf");
+		ifstream httpd_in(xamppFolder.string() + "\\apache\\conf\\httpd.conf");
 		string httpd_content;
 		httpd_content.assign(istreambuf_iterator<char>(httpd_in), istreambuf_iterator<char>());
 		httpd_in.close();
@@ -140,13 +144,13 @@ int main(int argc, char* argv[])
 		string httpd_replaced = regex_replace(httpd_content, httpd_regex, "$1" + selectedPath.string() + "$3" + selectedPath.string() + "$5");
 
 		//Modification of httpd file
-		ofstream httpd_out("C:\\xampp\\apache\\conf\\httpd.conf");
+		ofstream httpd_out(xamppFolder.string() + "\\apache\\conf\\httpd.conf");
 		httpd_out << httpd_replaced;
 		httpd_out.close();
 
 		//Configuration for working SSL
 		//Read of the whole content of httpd-ssl configuration file
-		ifstream httpdssl_in("C:\\xampp\\apache\\conf\\extra\\httpd-ssl.conf");
+		ifstream httpdssl_in(xamppFolder.string() + "\\apache\\conf\\extra\\httpd-ssl.conf");
 		string httpdssl_content;
 		httpdssl_content.assign(istreambuf_iterator<char>(httpdssl_in), istreambuf_iterator<char>());
 		httpdssl_in.close();
@@ -156,13 +160,13 @@ int main(int argc, char* argv[])
 		string httpdssl_replaced = regex_replace(httpdssl_content, httpdssl_regex, "$1" + selectedPath.string() + "$3");
 
 		//Modification of httpd-ssl file
-		ofstream httpdssl_out("C:\\xampp\\apache\\conf\\extra\\httpd-ssl.conf");
+		ofstream httpdssl_out(xamppFolder.string() + "\\apache\\conf\\extra\\httpd-ssl.conf");
 		httpdssl_out << httpdssl_replaced;
 		httpdssl_out.close();
 		
 	}
 	else
-		cout << "No path or flag provided\n";
+		cout << "Missing arguments\n";
 
 	return 0;
 }
